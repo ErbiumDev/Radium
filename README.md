@@ -7,8 +7,6 @@ Custom Cheatscript Commands
 <br>
 Inventory
 <br>
-Use your Equipped Skin
-<br>
 And More!
 
 ## Contributing
