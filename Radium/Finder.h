@@ -36,8 +36,24 @@ namespace Unreal {
 		void* UKD_00;
 		FField* Next;
 		FName Name;
-		uint8_t FlagsPrivate;
+		int32_t FlagsPrivate;
 	};
+
+	struct FProperty : FField
+	{
+		int32_t ArrayDim;
+		int32_t ElementSize;
+		int32_t PropertyFlags;
+		uint16_t RepIndex;
+		void* BlueprintReplicationCondition;
+		int32_t Offset_Internal;
+		FName RepNotifyFunc;
+		FProperty* PropertyLinkNext;
+		FProperty* NextRef;
+		FProperty* DestructorLinkNext;
+		FProperty* PostConstructLinkNext;
+	};
+
 
 	struct UStruct_New2 : UField_New
 	{
@@ -47,10 +63,10 @@ namespace Unreal {
 		int32_t Size;
 		int32_t MinAlignment;
 		TArray<uint8_t> Script;
-		void* PropertyLink;
-		void* RefLink;
-		void* DestructorLink;
-		void* PostConstructLink;
+		FProperty* PropertyLink;
+		FProperty* RefLink;
+		FProperty* DestructorLink;
+		FProperty* PostConstructLink;
 	};
 }
 
@@ -107,15 +123,20 @@ namespace Finder {
 		}
 	}
 
-	int FindOffset(UObject* TargetObject, std::string TargetChildName) {
+	template<class T>
+	T GetValuePointer(UObject* Object, void* Prop) {
+		return reinterpret_cast<T>(Object->GetAddress() + GetOffset(Prop));
+	}
+
+	int GetPropByClass(Unreal::UObject* TargetClass, std::string TargetChildName) {
 		UObject* Prop = nullptr;
 		if (GVersion < 5.0f) {
-			UStruct_Old* Class = (UStruct_Old*)TargetObject->Class;
+			UStruct_Old* Class = (UStruct_Old*)TargetClass;
 			if (Class->Children) {
 				Prop = FindChild(Class, TargetChildName);
 			}
 			if (Prop == nullptr) {
-				UStruct_Old* Struct = reinterpret_cast<UStruct_Old*>(TargetObject->Class)->Super;
+				UStruct_Old* Struct = reinterpret_cast<UStruct_Old*>(Class)->Super;
 				while (Struct)
 				{
 					if (Struct->Children) {
@@ -129,12 +150,12 @@ namespace Finder {
 			}
 		}
 		else if (GVersion < 12.0f) {
-			UStruct_New* Class = (UStruct_New*)TargetObject->Class;
+			UStruct_New* Class = (UStruct_New*)TargetClass;
 			if (Class->Children) {
 				Prop = FindChild(Class, TargetChildName);
 			}
 			if (Prop == nullptr) {
-				UStruct_New* Struct = reinterpret_cast<UStruct_New*>(TargetObject->Class)->Super;
+				UStruct_New* Struct = reinterpret_cast<UStruct_New*>(Class)->Super;
 				while (Struct)
 				{
 					if (Struct->Children) {
@@ -148,15 +169,15 @@ namespace Finder {
 			}
 		}
 		else {
-			UStruct_New2* Class = (UStruct_New2*)TargetObject->Class;
-			if (Class->Children) {
+			UStruct_New2* Class = (UStruct_New2*)TargetClass;
+			if (Class->ChildProperties) {
 				Prop = FindChild(Class, TargetChildName);
 			}
 			if (Prop == nullptr) {
-				UStruct_New2* Struct = reinterpret_cast<UStruct_New2*>(TargetObject->Class)->Super;
+				UStruct_New2* Struct = reinterpret_cast<UStruct_New2*>(Class)->Super;
 				while (Struct)
 				{
-					if (Struct->Children) {
+					if (Struct->ChildProperties) {
 						Prop = FindChild(Struct, TargetChildName);
 						if (Prop != nullptr) {
 							break;
@@ -166,17 +187,7 @@ namespace Finder {
 				}
 			}
 		}
-		if (Prop != nullptr) {
-			return GetOffset(Prop);
-		}
-		else {
-			return 0;
-		}
-	}
-
-	template<class T>
-	T GetValuePointer(UObject* Object, void* Prop) {
-		return reinterpret_cast<T>(Object->GetAddress() + GetOffset(Prop));
+		return GetOffset(Prop);
 	}
 
 	//Doesnt work on structs only UObject Based Types and types like ints, bools, etc (i think)
@@ -230,7 +241,7 @@ namespace Finder {
 				UStruct_New2* Struct = reinterpret_cast<UStruct_New2*>(TargetObject->Class)->Super;
 				while (Struct)
 				{
-					if (Struct->Children) {
+					if (Struct->ChildProperties) {
 						Prop = FindChild(Struct, TargetChildName);
 						if (Prop != nullptr) {
 							break;

@@ -17,7 +17,13 @@ namespace Sigs {
 		const char* StaticConstructObject = "4C 89 44 24 ? 53 55 56 57 41 54 41 56 41 57 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ?";
 		const char* SpawnActor = "40 53 56 57 48 83 EC 70 48 8B 05 ? ? ? ? 48 33 C4 48 89 44 24 ? 0F 28 1D ? ? ? ? 0F 57 D2 48 8B B4 24 ? ? ? ? 0F 28 CB";
 	}
+
+	namespace UE419 {
+		const char* GWorld = "48 89 35 ? ? ? ? 41 8B 96 ? ? ? ?"; //3
+	}
+
 	namespace UE420 {
+		const char* StaticLoadObjectOld = "4C 89 4C 24 ? 48 89 54 24 ? 48 89 4C 24 ? 55 53 56 57 48 8B EC";
 		const char* StaticLoadObject = "4C 89 4C 24 ? 48 89 54 24 ? 48 89 4C 24 ? 55 53 56 57 48 8D 6C 24 ? 48 81 EC ? ? ? ? 33 D2";
 		const char* Free = "48 85 C9 74 1D 4C 8B 05 ? ? ? ? 4D 85 C0";
 		const char* FNameToString = "48 89 5C 24 ? 57 48 83 EC 40 83 79 04 00 48 8B DA 48 8B F9";
@@ -74,20 +80,8 @@ namespace Sigs {
 		const char* SpawnActor = "";
 	}
 
-	namespace UE425 {
-		const char* StaticLoadObject = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 85 ? ? ? ? 8B 85 ? ? ? ? 48 8B FA";
-		const char* Free = "48 85 C9 74 2E 53";
-		const char* FNameToString = "48 89 5C 24 ? 55 56 57 48 8B EC 48 83 EC 30 8B 01 48 8B F1 44 8B 49 04 8B F8";
-		const char* GetFullName = "40 53 48 83 EC 20 48 8B C2 48 8B D9 48 85 D2 75 43";
-		const char* GObjects = "49 63 C8 48 8D 14 40 48 8B 05 ? ? ? ? 48 8B 0C C8 48 8D 04 D1"; //10
-		const char* GWorld = "48 89 05 ? ? ? ? 48 8B B6 ? ? ? ?"; //3
-		const char* ProcessEvent = "40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC ? ? ? ? 48 8D 6C 24 ? 48 89 9D ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C5 48 89 85 ? ? ? ? 8B 41 0C 45 33 F6 3B 05 ? ? ? ? 4D 8B F8 48 8B F2 4C 8B E1 41 B8 ? ? ? ? 7D 2A";
-		const char* StaticConstructObject = "4C 89 44 24 18 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4";
-		const char* SpawnActor = "53 56 57 48 83 EC 70 48 8B 05 ? ? ? ? 48 33 C4 48 89 44 24 60 0F 28 1D ? ? ? ? 0F 57 D2 48 8B B4 24 B0";
-	}
-
 	namespace UE426 {
-		const char* StaticLoadObject = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 85 ? ? ? ? 8B 85 ? ? ? ? 48 8B FA";
+		const char* StaticLoadObject = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 85 ? ? ? ? 8B 85 ? ? ? ?";
 		const char* Free = "48 85 C9 74 2E 53";
 		const char* FNameToString = "48 89 5C 24 ? 55 56 57 48 8B EC 48 83 EC 30 8B 01 48 8B F1 44 8B 49 04 8B F8";
 		const char* GetFullName = "40 53 48 83 EC 20 48 8B C2 48 8B D9 48 85 D2 75 43";
@@ -99,6 +93,7 @@ namespace Sigs {
 	}
 
 	namespace UE427 {
+		//(TODO)
 		const char* GetFullName = "";
 		const char* GObjects = "";
 		const char* GWorld = "";
@@ -108,6 +103,7 @@ namespace Sigs {
 	}
 
 	namespace UE51 {
+		//(TODO)
 		const char* GetFullName = "";
 		const char* GObjects = "";
 		const char* GWorld = "";
@@ -172,7 +168,7 @@ namespace Memory {
 				return address;
 			}
 		}
-		return NULL;
+		return 0;
 	}
 
 	uintptr_t GetAddressFromOffset(DWORD Offset) {

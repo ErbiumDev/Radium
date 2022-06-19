@@ -1,5 +1,5 @@
 #pragma once
-float GVersion = 4.1f; //(TODO) Get the version somehow?
+float GVersion = 0.0f; //(TODO) Get the version somehow?
 #include "Memory.h"
 #include <string>
 #include <locale>
@@ -369,6 +369,18 @@ namespace Game {
 	Unreal::UObject* CM;
 }
 
+struct BitField
+{
+	unsigned char A : 1;
+	unsigned char B : 1;
+	unsigned char C : 1;
+	unsigned char D : 1;
+	unsigned char E : 1;
+	unsigned char F : 1;
+	unsigned char G : 1;
+	unsigned char H : 1;
+};
+
 enum class ESpawnActorCollisionHandlingMethod : uint8_t
 {
 	Undefined = 0,
@@ -435,7 +447,7 @@ public:
 
 	uint8_t ObjectFlags;
 };
-Unreal::UObject* (__fastcall*StaticLoadObjectInternal)(Unreal::UObject* ObjectClass, Unreal::UObject* InOuter, const TCHAR* InName, const TCHAR* Filename, uint32_t LoadFlags, Unreal::UObject* Sandbox, bool bAllowObjectReconciliation);
+Unreal::UObject* (__fastcall*StaticLoadObjectInternal)(Unreal::UObject*, Unreal::UObject*, const TCHAR*, const TCHAR*, uint32_t, Unreal::UObject*, bool);
 Unreal::UObject* (__fastcall*StaticConstructObjectInternal)(void*, void*, void*, int, unsigned int, void*, bool, void*, bool);
 Unreal::UObject* (__fastcall*SpawnActor)(Unreal::UObject* World, Unreal::UObject* Class, Unreal::FVector* Loc, Unreal::FVector* Rot, const FActorSpawnParameters& SpawnParameters);
 

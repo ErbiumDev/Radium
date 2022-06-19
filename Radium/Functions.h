@@ -1,29 +1,39 @@
 #pragma once
 #pragma comment(lib,"minhook/minhook.lib")
 #include "Finder.h"
+#include <regex>
 #include "minhook/MinHook.h"
 Unreal::UObject* PrevWAC = nullptr;
+Unreal::FString(*GEV)();
 namespace Functions {
-
-	//Credit: Ultimanite (I'm to lazy to rewrite this/find another way to get Version)
-	//(TODO) Rewrite this + find a way that doesnt require FindObject
 	float GetVersion() {
-		Unreal::UObject* Default__FortRuntimeOptions = FindObject("/Script/FortniteGame.Default__FortRuntimeOptions");
-		Unreal::UObject* GetGameVersion = FindObject("/Script/FortniteGame.FortRuntimeOptions:GetGameVersion");
+		uintptr_t GVAddr = Memory::GetAddressFromSig("40 53 48 83 EC 20 48 8B D9 E8 ? ? ? ? 48 8B C8 41 B8 04 ? ? ? 48 8B D3", "Get Game Version");
+		if ((Memory::SigScan(Sigs::UE416::Free) != 0 && Memory::SigScan(Sigs::UE416::GObjects) != 0)) {
+			//Scuffed AF but working
+			if (Memory::SigScan(Sigs::UE416::GWorld) != 0) {
+				return 1.8f;
+			}
+		}
+		else {
+			GEV = decltype(GEV)(GVAddr);
+			std::string FNVer = GEV().ToString();
 
-		if (GetGameVersion)
-		{
-			Unreal::FString GameVersion;
-			Default__FortRuntimeOptions->ProcessEvent(GetGameVersion, &GameVersion);
-			std::string FNVer = GameVersion.ToString();
-			FNVer.erase(0, FNVer.find_last_of(("-"), FNVer.length() - 1) + 1);
+			FNVer.erase(0, FNVer.find_last_of("-", FNVer.length() - 1) + 1);
 
 			return std::stof(FNVer);
 		}
-		else {
-			return 1.8f; //(TODO) Get Version for Versions under ~2.5 
+	}
+
+	namespace GameUtils {
+		int GetSeason() {
+			return (int)GVersion;
 		}
-		return 0.0f;
+
+		Unreal::UObject** GetWorld() {
+			Unreal::UObject* Engine = FindObject("/Engine/Transient.FortEngine", false);
+			auto GVP = *Finder::Find(Engine, "GameViewport");
+			return Finder::Find(GVP, "World");
+		}
 	}
 
 	namespace PlayerController {
@@ -33,6 +43,13 @@ namespace Functions {
 
 		void UpdatePC() {
 			Game::GPC = GFPC(*Game::GWorld);
+		}
+
+		void EnableInifniteAmmo() {
+			if (GVersion >= 7.0f) {
+				*Finder::Find<bool*>(Game::GPC, "bInfiniteMagazine") = true;
+			}
+			*Finder::Find<bool*>(Game::GPC, "bInfiniteAmmo") = true;
 		}
 
 		void SwitchLevel(Unreal::FString Map) {
@@ -46,6 +63,7 @@ namespace Functions {
 
 	namespace Pawn {
 		void EquipGameplayEffect(Unreal::UObject* GE) {
+			//Credit to Ultimanite for this
 			struct FGameplayEffectContextHandle
 			{
 				char UKD_00[0x30];
@@ -65,37 +83,39 @@ namespace Functions {
 		}
 
 		void EquipGA(Unreal::UObject* GA) {
-			//Credit Ultimanite for this
+			//Credit to Ultimanite for this
 			struct FGameplayAbilitySpecDef
 			{
 				Unreal::UObject* Ability;
 				unsigned char Unk00[0x90];
 			};
 
-			Unreal::UObject* DefaultGameplayEffect = nullptr;
-			if (GVersion >= 7.0f)
-			{
-				DefaultGameplayEffect = FindObject(("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff_Health.Default__GE_Athena_PurpleStuff_Health_C"));
+			Unreal::UObject* DefaultGameplayEffect = FindObject(("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff_Health.Default__GE_Athena_PurpleStuff_Health_C"));
+			if(!DefaultGameplayEffect) {
+				DefaultGameplayEffect = FindObject("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff.Default__GE_Athena_PurpleStuff_C");
+				if (!DefaultGameplayEffect) {
+					DefaultGameplayEffect = FindObject("/Game/Athena/Items/Consumables/Bush/GE_Athena_Bush.Default__GE_Athena_Bush_C");
+				}
 			}
-			else {
-				DefaultGameplayEffect = FindObject(("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff.Default__GE_Athena_PurpleStuff_C"));
-			}
-			Unreal::TArray<FGameplayAbilitySpecDef>* GrantedGAs = reinterpret_cast<Unreal::TArray<FGameplayAbilitySpecDef>*>(__int64(DefaultGameplayEffect) + Finder::FindOffset(FindObject("/Script/GameplayAbilities.GameplayEffect"),"GrantedAbilities"));
+			Unreal::TArray<FGameplayAbilitySpecDef>* GrantedGAs = reinterpret_cast<Unreal::TArray<FGameplayAbilitySpecDef>*>(__int64(DefaultGameplayEffect) + Finder::GetPropByClass(FindObject("/Script/GameplayAbilities.GameplayEffect"),"GrantedAbilities"));
 			GrantedGAs->Data[0].Ability = GA;
 			enum class EGameplayEffectDurationType : uint8_t
 			{
 				Instant, Infinite, HasDuration, EGameplayEffectDurationType_MAX
 			};
-			*reinterpret_cast<EGameplayEffectDurationType*>(__int64(DefaultGameplayEffect) + Finder::FindOffset(FindObject("/Script/GameplayAbilities.GameplayEffect"),"DurationPolicy")) = EGameplayEffectDurationType::Infinite;
+			*reinterpret_cast<EGameplayEffectDurationType*>(__int64(DefaultGameplayEffect) + Finder::GetPropByClass(FindObject("/Script/GameplayAbilities.GameplayEffect"),"DurationPolicy")) = EGameplayEffectDurationType::Infinite;
 			auto GameplayEffectClass = FindObject(("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff_Health.GE_Athena_PurpleStuff_Health_C"));
 
 			if (!GameplayEffectClass)
 			{
-				GameplayEffectClass = FindObject(("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff.GE_Athena_PurpleStuff_C"));
+				GameplayEffectClass = FindObject("/Game/Athena/Items/Consumables/PurpleStuff/GE_Athena_PurpleStuff.GE_Athena_PurpleStuff_C");
+				if (!GameplayEffectClass) {
+					GameplayEffectClass = FindObject("/Game/Athena/Items/Consumables/Bush/GE_Athena_Bush.GE_Athena_Bush_C");
+				}
 			}
 			EquipGameplayEffect(GameplayEffectClass);
 		}
-
+		
 		void ServerChoosePart(Unreal::UObject* TargetPawn, Unreal::UObject* Part, EFortCustomPartType Index) {
 
 			struct
@@ -115,7 +135,7 @@ namespace Functions {
 			struct {
 				Unreal::UObject* Def;
 				Unreal::FGuid Guid;
-				Unreal::UObject* Ret; //Idk if this works lmao
+				Unreal::UObject* Ret;
 			} params;
 			if (WeaponDef->Class->GetNameOld().find("AthenaGadget") != std::string::npos) {
 				if (GVersion < 6.0f) {
@@ -162,17 +182,17 @@ namespace Functions {
 		}
 
 		void SetPlaylist(Unreal::UObject* GS, Unreal::UObject* Playlist) {
-			if (GVersion < 2.5f) {
-				return;
-			}
+			return; //Disable bc it crashes on Bus
 			if (GVersion < 7.0f) {
 				Unreal::UObject** CPD = Finder::Find(GS, "CurrentPlaylistData");
 				*CPD = Playlist;
 				GS->ProcessEvent(FindObject("/Script/FortniteGame.FortGameStateAthena:OnRep_CurrentPlaylistData"));
 			}
 			else {
-				Unreal::UObject** BasePlaylist = reinterpret_cast<Unreal::UObject**>(Finder::Find(GS, "CurrentPlaylistInfo") + __int64(Finder::FindOffset(FindObject("/Script/FortniteGame.PlaylistPropertyArray"),"BasePlaylist")));
+				Unreal::UObject** BasePlaylist = reinterpret_cast<Unreal::UObject**>(__int64(Finder::Find(GS, "CurrentPlaylistInfo")) + __int64(Finder::GetPropByClass(FindObject("/Script/FortniteGame.PlaylistPropertyArray"),"BasePlaylist")));
+				Unreal::UObject** OverridePlaylist = reinterpret_cast<Unreal::UObject**>(__int64(Finder::Find(GS, "CurrentPlaylistInfo")) + __int64(Finder::GetPropByClass(FindObject("/Script/FortniteGame.PlaylistPropertyArray"),"OverridePlaylist")));
 				*BasePlaylist = Playlist;
+				*OverridePlaylist = Playlist;
 				GS->ProcessEvent(FindObject("/Script/FortniteGame.FortGameStateAthena:OnRep_CurrentPlaylistInfo"));
 			}
 		}
@@ -197,25 +217,13 @@ namespace Functions {
 			//(TODO) Find a way to get pickaxe without the Loadout Struct.
 		}
 
-		/*void ShowSkin() {
-			if (GVersion >= 10.0f) {
-				auto fn = FindObject(("/Script/FortniteGame.FortKismetLibrary:UpdatePlayerCustomCharacterPartsVisualization"));
-				auto FKL = FindObject("/Script/FortniteGame.Default__FortKismetLibrary");
-				Unreal::UObject* PlayerState = *Finder::Find(Game::GPC, "PlayerState");
-				FKL->ProcessEvent(fn, &PlayerState);
-			}
-			else {
-				Unreal::UObject* FortHero = FindObject("/Engine/Transient.FortHero");
-				auto CharParts = reinterpret_cast<Unreal::TArray<Unreal::UObject*>*>(FortHero->GetAddress() + Finder::FindOffset(FindObject("/Script/FortniteGame.FortHero:CharacterParts")));
-				Pawn::ServerChoosePart(Game::GPawn, CharParts->Data[0], EFortCustomPartType::Body);
-				Pawn::ServerChoosePart(Game::GPawn, CharParts->Data[1], EFortCustomPartType::Head);
-				Pawn::ServerChoosePart(Game::GPawn, CharParts->Data[2], EFortCustomPartType::Hat);
-				Unreal::UObject* PlayerState = *Finder::Find(Game::GPC, "PlayerState");
-				PlayerState->ProcessEvent(FindObject("/Script/FortniteGame.FortPlayerState:OnRep_CharacterParts"));
-			}
-		}*/
+		//Doesnt work on C2
+		bool IsInBus() {
+			bool Ret;
+			Game::GPC->ProcessEvent(FindObject("/Script/FortniteGame.FortPlayerControllerAthena:IsInAircraft"), &Ret);
+			return Ret;
+		}
 
-		//Doesnt work on ~10.40+
 		void ShowSkin() {
 			if (GVersion < 11.0f) {
 				Pawn::ServerChoosePart(Game::GPawn, StaticLoadObjectInternal(FindObject("/Script/FortniteGame.CustomCharacterPart", true), nullptr, L"/Game/Characters/CharacterParts/Male/Medium/Heads/M_Med_Soldier_Head_01.M_Med_Soldier_Head_01", 0, 0, 0, 0), EFortCustomPartType::Head);
@@ -229,7 +237,16 @@ namespace Functions {
 				}
 			}
 			else {
-				//(TODO) C2 Jonesy
+				if (GVersion >= 13.0f) {
+					Pawn::ServerChoosePart(Game::GPawn, StaticLoadObjectInternal(FindObject("/Script/FortniteGame.CustomCharacterPart", true), nullptr, L"/Game/Characters/CharacterParts/Male/Medium/Heads/CP_Athena_Head_M_RebirthSoldier.CP_Athena_Head_M_RebirthSoldier", 0, 0, 0, 0), EFortCustomPartType::Head);
+				}
+				else {
+					Pawn::ServerChoosePart(Game::GPawn, StaticLoadObjectInternal(FindObject("/Script/FortniteGame.CustomCharacterPart", true), nullptr, L"/Game/Characters/CharacterParts/Male/Medium/Heads/CP_Athena_Head_M_RebithSoldier.CP_Athena_Head_M_RebithSoldier", 0, 0, 0, 0), EFortCustomPartType::Head);
+				}
+				Pawn::ServerChoosePart(Game::GPawn, StaticLoadObjectInternal(FindObject("/Script/FortniteGame.CustomCharacterPart", true), nullptr, L"/Game/Athena/Heroes/Meshes/Bodies/CP_Athena_Body_M_RebirthSoldier.CP_Athena_Body_M_RebirthSoldier.CP_Athena_Body_M_RebirthSoldier", 0, 0, 0, 0), EFortCustomPartType::Body);
+				Pawn::ServerChoosePart(Game::GPawn, StaticLoadObjectInternal(FindObject("/Script/FortniteGame.CustomCharacterPart", true), nullptr, L"/Game/Characters/CharacterParts/FaceAccessories/CP_M_MED_RebirthSoldier.CP_M_MED_RebirthSoldier", 0, 0, 0, 0), EFortCustomPartType::Face);
+				Unreal::UObject* PlayerState = *Finder::Find(Game::GPawn, "PlayerState");
+				PlayerState->ProcessEvent(FindObject("/Script/FortniteGame.FortPlayerState:OnRep_CharacterData"));
 			}
 		}
 
@@ -258,17 +275,13 @@ namespace Functions {
 			*CM = NewCM;
 			Game::CM = NewCM;
 		}
-	}
 
-	namespace GameUtils {
-		int GetSeason() {
-			return (int)GVersion;
-		}
-
-		Unreal::UObject* GetWorld() {
-			Unreal::UObject* Engine = FindObject("/Engine/Transient.FortEngine", false);
-			auto GVP = *Finder::Find(Engine, "GameViewport");
-			return *Finder::Find(GVP, "World");
+		//UE4 Console
+		void InitUEConsole() {
+			Unreal::UObject* Engine = FindObject("/Engine/Transient.FortEngine");
+			Unreal::UObject* GVP = *Finder::Find(Engine, "GameViewport");
+			Unreal::UObject* NewC = StaticConstructObjectInternal(FindObject("/Script/Engine.Console"), GVP, 0, 0, 0, 0, 0, 0, 0);
+			*Finder::Find(GVP, "ViewportConsole") = NewC;
 		}
 	}
 
@@ -300,10 +313,6 @@ namespace Functions {
 
 			auto TemporaryItemInstance = Params.ReturnValue;
 			TemporaryItemInstance->ProcessEvent(FindObject("/Script/FortniteGame.FortItem:SetOwningControllerForTemporaryItem"), &Game::GPC);
-
-
-			/*int* CurrentCount = reinterpret_cast<int*>(__int64(reinterpret_cast<void*>(TemporaryItemInstance + __int64(Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem:ItemEntry"))))) + static_cast<__int64>(0x0C));
-			*CurrentCount = Count;*/
 
 			return TemporaryItemInstance;
 		}
@@ -344,12 +353,28 @@ namespace Functions {
 				{
 					unsigned char Unk00[0xA8];
 				};
-				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList"),"ReplicatedEntries"));
+				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"),"ReplicatedEntries"));
 				for (int i = 0; i < Entries->Num(); i++) {
 					ItemEntrySize Entry = Entries->Data[i];
-					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemGuid"));
+					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemGuid"));
 					if (GUIDsMatch(*GUID, *ItemGUID)) {
-						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemDefinition"));
+						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemDefinition"));
+						Pawn::EquipItem(Game::GPawn, ItemDef, *ItemGUID);
+						return;
+					}
+				}
+			}
+			if (Version == 2 || Version == 3) {
+				struct ItemEntrySize
+				{
+					unsigned char Unk00[0xC0];
+				};
+				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"),"ReplicatedEntries"));
+				for (int i = 0; i < Entries->Num(); i++) {
+					ItemEntrySize Entry = Entries->Data[i];
+					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemGuid"));
+					if (GUIDsMatch(*GUID, *ItemGUID)) {
+						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemDefinition"));
 						Pawn::EquipItem(Game::GPawn, ItemDef, *ItemGUID);
 						return;
 					}
@@ -360,12 +385,12 @@ namespace Functions {
 				{
 					unsigned char Unk00[0xD0];
 				};
-				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"));
+				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"));
 				for (int i = 0; i < Entries->Num(); i++) {
 					ItemEntrySize Entry = Entries->Data[i];
-					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemGuid"));
+					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemGuid"));
 					if (GUIDsMatch(*GUID, *ItemGUID)) {
-						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemDefinition"));
+						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemDefinition"));
 						Pawn::EquipItem(Game::GPawn, ItemDef, *ItemGUID);
 						return;
 					}
@@ -376,12 +401,28 @@ namespace Functions {
 				{
 					unsigned char Unk00[0x120];
 				};
-				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"));
+				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"));
 				for (int i = 0; i < Entries->Num(); i++) {
 					ItemEntrySize Entry = Entries->Data[i];
-					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemGuid"));
+					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemGuid"));
 					if (GUIDsMatch(*GUID, *ItemGUID)) {
-						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemDefinition"));
+						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemDefinition"));
+						Pawn::EquipItem(Game::GPawn, ItemDef, *ItemGUID);
+						return;
+					}
+				}
+			}
+			if (Version == 12 || Version == 13 || Version == 14 || Version == 15) {
+				struct ItemEntrySize
+				{
+					unsigned char Unk00[0x160];
+				};
+				auto Entries = reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"));
+				for (int i = 0; i < Entries->Num(); i++) {
+					ItemEntrySize Entry = Entries->Data[i];
+					Unreal::FGuid* ItemGUID = reinterpret_cast<Unreal::FGuid*>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemGuid"));
+					if (GUIDsMatch(*GUID, *ItemGUID)) {
+						Unreal::UObject* ItemDef = *reinterpret_cast<Unreal::UObject**>(__int64(&Entry) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemEntry", true), "ItemDefinition"));
 						Pawn::EquipItem(Game::GPawn, ItemDef, *ItemGUID);
 						return;
 					}
@@ -397,45 +438,45 @@ namespace Functions {
 				{
 					unsigned char Unk00[0xA8];
 				};
-				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem"), "ItemEntry"));
-				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList", true), "ReplicatedEntries"))->Add(*ItemEntry);
+				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortWorldItem", true), "ItemEntry"));
+				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"))->Add(*ItemEntry);
 			}
-			if (Version == 3) {
+			if (Version == 2 || Version == 3) {
 				struct ItemEntrySize
 				{
 					unsigned char Unk00[0xC0];
 				};
-				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem"),"ItemEntry"));
-				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList",true),"ReplicatedEntries"))->Add(*ItemEntry);
+				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortWorldItem", true), "ItemEntry"));
+				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"))->Add(*ItemEntry);
 			}
 			if (Version == 4 || Version == 5 || Version == 6) {
 				struct ItemEntrySize
 				{
 					unsigned char Unk00[0xD0];
 				};
-				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem"), "ItemEntry"));
-				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList", true), "ReplicatedEntries"))->Add(*ItemEntry);
+				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortWorldItem", true), "ItemEntry"));
+				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"))->Add(*ItemEntry);
 			}
 			if (Version == 7 || Version == 8 || Version == 9 || Version == 10) {
 				struct ItemEntrySize
 				{
 					unsigned char Unk00[0x120];
 				};
-				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem"), "ItemEntry"));
-				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList", true), "ReplicatedEntries"))->Add(*ItemEntry);
+				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortWorldItem",true), "ItemEntry"));
+				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList", true), "ReplicatedEntries"))->Add(*ItemEntry);
 			}
-			if (Version == 13 || Version == 14) {
+			if (Version == 12 || Version == 13 || Version == 14 || Version == 15) {
 				struct ItemEntrySize
 				{
 					unsigned char Unk00[0x160];
 				};
-				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortWorldItem"), "ItemEntry"));
-				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList", true), "ReplicatedEntries"))->Add(*ItemEntry);
+				auto ItemEntry = reinterpret_cast<ItemEntrySize*>(__int64(Item) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortWorldItem", true), "ItemEntry"));
+				reinterpret_cast<Unreal::TArray<ItemEntrySize>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"), "ReplicatedEntries"))->Add(*ItemEntry);
 			}
 
 			//I'll have to check if this is the version
 			if (Version < 9.0f) {
-				reinterpret_cast<Unreal::TArray<Unreal::UObject*>*>(__int64(FortInventory) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemList"),"ItemInstances"))->Add(Item);
+				reinterpret_cast<Unreal::TArray<Unreal::UObject*>*>(__int64(FortInventory) + Finder::GetPropByClass(FindObject("/Script/FortniteGame.FortItemList"),"ItemInstances"))->Add(Item);
 			}
 			if (GVersion < 7.40f) {
 				struct
@@ -457,8 +498,9 @@ namespace Functions {
 }
 
 void Init() {
+	std::cout << "\nFN Version: " << GVersion << std::endl;
 	GFPC = decltype(GFPC)(Memory::GetAddressFromSig(Sigs::GetFirstPlayerController, "GetFirstPlayerController"));
-	if (GVersion < 2.5) {
+	if (GVersion < 2.0f) {
 		uintptr_t FNTS_Addr = Memory::GetAddressFromSig(Sigs::UE416::FNameToString, "FName::ToString 4.16");
 		uintptr_t FnFree_Addr = Memory::GetAddressFromSig(Sigs::UE416::Free, "FnFree 4.16");
 		uintptr_t ProcessEvent_Addr = Memory::GetAddressFromSig(Sigs::UE416::ProcessEvent, "UObject::ProcessEvent 4.16");
@@ -479,7 +521,34 @@ void Init() {
 			int32_t OpenForDisregardForGC;
 			Unreal::UObjectArray Objects;
 		};
-		//Game::GObjs = new Unreal::UObjectArray(reinterpret_cast<OAP*>(GObjects_Addr)->Objects);
+		Game::ObjObjects = new Unreal::UObjectArray(reinterpret_cast<OAP*>(GObjects_Addr)->Objects);
+		Game::GWorld = reinterpret_cast<Unreal::UObject**>(GWorld_Addr);
+		SpawnActor = decltype(SpawnActor)(SA_Addr);
+		StaticConstructObjectInternal = decltype(StaticConstructObjectInternal)(SCO_Addr);
+		StaticLoadObjectInternal = decltype(StaticLoadObjectInternal)(SLO_Addr);
+		Unreal::ProcessEventOG = decltype(Unreal::ProcessEventOG)(ProcessEvent_Addr);
+	}
+	else if (GVersion < 2.5f) {
+		uintptr_t FNTS_Addr = Memory::GetAddressFromSig(Sigs::UE416::FNameToString, "FName::ToString 4.19");
+		uintptr_t FnFree_Addr = Memory::GetAddressFromSig(Sigs::UE416::Free, "FnFree 4.19");
+		uintptr_t ProcessEvent_Addr = Memory::GetAddressFromSig(Sigs::UE416::ProcessEvent, "UObject::ProcessEvent 4.19");
+		uintptr_t GetFullName_Addr = Memory::GetAddressFromSig(Sigs::UE416::GetFullName, "UObject::GetFullName 4.19");
+		uintptr_t GObjects_Addr = Memory::GetAddressFromSigR(Sigs::UE416::GObjects, "GUObjectArray 4.19", 3);
+		uintptr_t GWorld_Addr = Memory::GetAddressFromSigR(Sigs::UE419::GWorld, "GWorld 4.19", 3);
+		uintptr_t SCO_Addr = Memory::GetAddressFromSig(Sigs::UE416::StaticConstructObject, "StaticConstructObject 4.19");
+		uintptr_t SLO_Addr = Memory::GetAddressFromSig(Sigs::UE416::StaticLoadObject, "StaticLoadObject 4.19");
+		uintptr_t SA_Addr = Memory::GetAddressFromSig(Sigs::UE416::SpawnActor, "UWorld::SpawnActor 4.19");
+		Unreal::GetObjectFullName = decltype(Unreal::GetObjectFullName)(GetFullName_Addr);
+		Unreal::FNameToString = decltype(Unreal::FNameToString)(FNTS_Addr);
+		Unreal::FnFree = decltype(Unreal::FnFree)(FnFree_Addr);
+		class OAP {
+		public:
+			int32_t ObjFirstGCIndex;
+			int32_t ObjLastNonGCIndex;
+			int32_t MaxObjectsNotConsideredByGC;
+			int32_t OpenForDisregardForGC;
+			Unreal::UObjectArray Objects;
+		};
 		Game::ObjObjects = new Unreal::UObjectArray(reinterpret_cast<OAP*>(GObjects_Addr)->Objects);
 		Game::GWorld = reinterpret_cast<Unreal::UObject**>(GWorld_Addr);
 		SpawnActor = decltype(SpawnActor)(SA_Addr);
@@ -496,6 +565,9 @@ void Init() {
 		uintptr_t GWorld_Addr = Memory::GetAddressFromSigR(Sigs::UE420::GWorld, "GWorld 4.20", 3);
 		uintptr_t SCO_Addr = Memory::GetAddressFromSig(Sigs::UE420::StaticConstructObject, "StaticConstructObject 4.20");
 		uintptr_t SLO_Addr = Memory::GetAddressFromSig(Sigs::UE420::StaticLoadObject, "StaticLoadObject 4.20");
+		if (SLO_Addr == 0) {
+			SLO_Addr = Memory::GetAddressFromSig(Sigs::UE420::StaticLoadObjectOld, "StaticLoadObject 4.20 - Old");
+		}
 		uintptr_t SA_Addr = Memory::GetAddressFromSig(Sigs::UE420::SpawnActor, "UWorld::SpawnActor 4.20");
 		Unreal::GetObjectFullName = decltype(Unreal::GetObjectFullName)(GetFullName_Addr);
 		Unreal::FNameToString = decltype(Unreal::FNameToString)(FNTS_Addr);

@@ -4,13 +4,33 @@
 namespace Hooks {
 	void* ProcessEventHook(Unreal::UObject* Object, Unreal::UObject* Function, void* Params) {
 		std::string FuncName = Function->GetName();
-		if (FuncName.find("BndEvt__PlayButton") != std::string::npos && Game::InGame == false) {
+		if (FuncName.find("_PlayButton") != std::string::npos && Game::InGame == false) {
 			Functions::PlayerController::UpdatePC();
 			if (GVersion < 11.0f) {
 				Functions::PlayerController::SwitchLevel(L"Athena_Terrain");
 			}
 			else {
 				Functions::PlayerController::SwitchLevel(L"Apollo_Terrain");
+			}
+		}
+
+		//Custom Commands
+		if (FuncName == "/Script/Engine.CheatManager:CheatScript") {
+			Unreal::FString* F_Cmd = reinterpret_cast<Unreal::FString*>(Params);
+			if (F_Cmd->IsValid()) {
+				std::string Cmd = F_Cmd->ToString();
+				std::string Arg = "";
+				if (Cmd.find(" ") != std::string::npos) {
+					Arg = Cmd.substr(Cmd.find(" ") + 1);
+				}
+				if (Cmd.find("equipitem") != std::string::npos) {
+					if (!Arg.empty()) {
+						Unreal::UObject* Item = FindObject(Arg + "." + Arg, false);
+						if (Item != nullptr) {
+							Functions::Inventory::AddItemToInventory(Item, 1, Functions::Inventory::EFortQuickBars::Primary);
+						}
+					}
+				}
 			}
 		}
 
@@ -22,12 +42,13 @@ namespace Hooks {
 			Functions::Player::InitCM();
 			Unreal::FString PlrPawnClass = L"PlayerPawn_Athena_C";
 			Game::CM->ProcessEvent(FindObject("/Script/Engine.CheatManager:Summon"), &PlrPawnClass);
-			Game::GPawn = Finder::FindActor(FindObject("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C",true));
+			Game::GPawn = Finder::FindActor(FindObject("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C", true));
 			Functions::PlayerController::Possess(Game::GPawn);
+			Game::CM->ProcessEvent(FindObject("/Script/Engine.CheatManager:God"));
 			Functions::Player::FixSpawnLoc();
 			Unreal::UObject* GameState = *Finder::Find(*Game::GWorld, "GameState");
 			uint8_t* GamePhase = Finder::Find<uint8_t*>(GameState, "GamePhase");
-			*GamePhase = 2;
+			*GamePhase = 3;
 			Functions::GameState::OnRepGamePhase(GameState);
 			if (Season != 4 && Season != 6 && Season != 7) {
 				Unreal::UObject* GameMode = *Finder::Find(*Game::GWorld, "AuthorityGameMode");
@@ -35,18 +56,18 @@ namespace Hooks {
 			}
 			Functions::PlayerController::ServerReadyToStartMatch();
 			Functions::Player::ShowSkin();
-			if (GVersion > 2.5f) {
+			if (GVersion >= 2.5f) {
 				Functions::GameState::SetPlaylist(GameState, FindObject("/Game/Athena/Playlists/Playground/Playlist_Playground.Playlist_Playground"));
 				Unreal::UObject* TargetClass = FindObject("/Script/FortniteGame.FortHLODSMActor");
 				Game::CM->ProcessEvent(FindObject("/Script/Engine.CheatManager:DestroyAll"), &TargetClass);
 			}
-
+			Functions::PlayerController::EnableInifniteAmmo();
 		}
 
-		if (FuncName == "/Script/FortniteGame.FortPlayerControllerAthena:ServerAttemptAircraftJump") {
+		if (FuncName == "/Script/FortniteGame.FortPlayerControllerAthena:ServerAttemptAircraftJump" || FuncName == "/Script/FortniteGame.FortControllerComponent_Aircraft:ServerAttemptAircraftJump" /*|| FuncName == "/Script/FortniteGame.FortGameModeAthena:OnAircraftExitedDropZone"*/) {
 			Unreal::FString PlrPawnClass = L"PlayerPawn_Athena_C";
 			Game::CM->ProcessEvent(FindObject("/Script/Engine.CheatManager:Summon"), &PlrPawnClass);
-			Game::GPawn = Finder::FindActor(FindObject("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C",true));
+			Game::GPawn = Finder::FindActor(FindObject("/Game/Athena/PlayerPawn_Athena.PlayerPawn_Athena_C", true));
 			Unreal::FVector Loc;
 			Game::GPC->ProcessEvent(FindObject("/Script/Engine.Actor:K2_GetActorLocation"), &Loc);
 			struct {
@@ -66,12 +87,14 @@ namespace Hooks {
 			Functions::Player::ShowSkin();
 		}
 
-		if (FuncName == "/Script/FortniteGame.FortPlayerController:ServerLoadingScreenDropped") {
+		if (FuncName == "/Script/FortniteGame.FortPlayerController:ServerLoadingScreenDropped" && Game::InGame == true) {
 			if (GVersion >= 2.5f) {
 				Functions::Pawn::EquipGA(FindObject("/Script/FortniteGame.FortGameplayAbility_Jump"));
 				Functions::Pawn::EquipGA(FindObject("/Script/FortniteGame.FortGameplayAbility_Sprint"));
 				Functions::Pawn::EquipGA(FindObject("/Game/Abilities/Player/Generic/Traits/DefaultPlayer/GA_DefaultPlayer_InteractSearch.GA_DefaultPlayer_InteractSearch_C"));
 				Functions::Pawn::EquipGA(FindObject("/Game/Abilities/Player/Generic/Traits/DefaultPlayer/GA_DefaultPlayer_InteractUse.GA_DefaultPlayer_InteractUse_C"));
+			}
+			if (GVersion >= 3.0f) {
 				//Vehicle Stuff
 				Functions::Pawn::EquipGA(FindObject("/Game/Athena/DrivableVehicles/GA_AthenaEnterVehicle.GA_AthenaEnterVehicle_C"));
 				Functions::Pawn::EquipGA(FindObject("/Game/Athena/DrivableVehicles/GA_AthenaExitVehicle.GA_AthenaExitVehicle_C"));
@@ -101,11 +124,12 @@ namespace Hooks {
 				*QuickBarP = Functions::Inventory::Quickbars;
 			}
 			Functions::Inventory::Quickbars->ProcessEvent(FindObject("/Script/Engine.Actor:SetOwner"), &Game::GPC);
-
-			Functions::Inventory::AddItemToInventory(FindObject("/Game/Athena/Items/Weapons/WID_Harvest_Pickaxe_Athena_C_T01.WID_Harvest_Pickaxe_Athena_C_T01"), 0, Functions::Inventory::EFortQuickBars::Primary, 1); //At some point ima try to get the players pickaxe
 			//(TODO) Add Building Stuff
+			Functions::Inventory::AddItemToInventory(FindObject("/Game/Athena/Items/Weapons/WID_Harvest_Pickaxe_Athena_C_T01.WID_Harvest_Pickaxe_Athena_C_T01"), 0, Functions::Inventory::EFortQuickBars::Primary, 1); //At some point ima try to get the players pickaxe
+
 			Unreal::UObject* GameState = *Finder::Find(*Game::GWorld, "GameState");
 			Functions::GameState::SetupUI(GameState);
+			Functions::Player::InitUEConsole();
 		}
 
 		//Item swapping
@@ -126,7 +150,7 @@ namespace Hooks {
 			SHPparams* pParams = (SHPparams*)Params;
 
 			if (pParams->Pickup != nullptr) {
-				Unreal::UObject* Item = *reinterpret_cast<Unreal::UObject**>(__int64(pParams->Pickup) + Finder::FindOffset(FindObject("/Script/FortniteGame.FortPickup"),"PrimaryPickupItemEntry") + Finder::FindOffset(FindObject("/Script/FortniteGame.FortItemEntry",true),"ItemDefinition"));
+				Unreal::UObject* Item = *Finder::Find(*Finder::Find(pParams->Pickup, "PrimaryPickupItemEntry"), "ItemDefinition");
 				Functions::Inventory::AddItemToInventory(Item, 1, Functions::Inventory::EFortQuickBars::Primary);
 			}
 		}
