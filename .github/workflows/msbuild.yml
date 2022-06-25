@@ -42,6 +42,6 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: Release
-        path: ${{env.SOLUTION_FILE_PATH}}/Raider/bin/Release
+        path: ${{env.SOLUTION_FILE_PATH}}/Radium/bin/Release
         if-no-files-found: warn
         retention-days: 60
