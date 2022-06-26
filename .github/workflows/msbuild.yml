@@ -38,10 +38,10 @@ jobs:
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
       
-    - name: Upload Release Artifact
+    - name: Upload Artifact
       uses: actions/upload-artifact@v3
       with:
-        name: Release
-        path: ${{env.SOLUTION_FILE_PATH}}/Radium/bin/Release
+        name: Radium.dll
+        path: ${{env.SOLUTION_FILE_PATH}}/Radium/bin/Radium.dll
         if-no-files-found: warn
         retention-days: 60
