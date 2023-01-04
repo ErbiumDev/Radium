@@ -1,4 +1,4 @@
-# Radium v2
+# Radium
 Fortnite In Game for *most* Versions between 1.7.2 and 15.50
 ## Features
 Unlock UE Console & Cheat Manager
